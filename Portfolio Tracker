@@ -1,0 +1,24 @@
+import yfinance as yf
+import pandas as pd
+
+class investment_portfolio:
+
+    def __init__(self, portfolio_name):         
+        self.name = portfolio_name
+        clmns = ['Sector','Asset Class', 'Quantity', 'Purchase Price']
+        self.portfolio = pd.DataFrame(columns=clmns)
+        return
+
+    def add_asset(self, ticker, sector, asset_class, quantity, purchase_price):
+        self.portfolio.loc[ticker] = {'Sector': sector, 'Asset Class': asset_class, 'Quantity': quantity, 'Purchase Price': purchase_price}
+        return
+    
+    def price(self, tickers, itv = '1d', prd = "1mo"):
+        prices = yf.download(tickers,auto_adjust=True, interval = itv, period = prd)['Close'][::-1]
+        if itv[-1] not in ['m', 'h']:
+            prices.index = prices.index.date
+        return prices
+
+test = investment_portfolio('Boaz')
+test.add_asset('AAPL', 'Computing', 'Stock', 4, 130)
+print(test.price('AAPL'))
