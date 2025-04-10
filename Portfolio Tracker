@@ -1,24 +1,49 @@
+
 import yfinance as yf
 import pandas as pd
+import matplotlib.pyplot as plt
+pd.set_option('display.max_columns', None)
+
 
 class investment_portfolio:
 
-    def __init__(self, portfolio_name):         
-        self.name = portfolio_name
-        clmns = ['Sector','Asset Class', 'Quantity', 'Purchase Price']
+    def __init__(self):         
+        clmns = ['Sector','Asset Class', 'Quantity', 'Purchase Price', 'Transaction Value', 'Current Value']
         self.portfolio = pd.DataFrame(columns=clmns)
         return
-
+    
     def add_asset(self, ticker, sector, asset_class, quantity, purchase_price):
-        self.portfolio.loc[ticker] = {'Sector': sector, 'Asset Class': asset_class, 'Quantity': quantity, 'Purchase Price': purchase_price}
+        transaction_value = quantity * purchase_price
+        current_value = quantity * self.price(ticker, prd='1d').iloc[0, 0]
+        self.portfolio.loc[ticker] = {'Sector': sector, 'Asset Class': asset_class, 'Quantity': quantity, 'Purchase Price': purchase_price,
+                                      'Transaction Value': transaction_value, 'Current Value': current_value}
         return
     
-    def price(self, tickers, itv = '1d', prd = "1mo"):
-        prices = yf.download(tickers,auto_adjust=True, interval = itv, period = prd)['Close'][::-1]
-        if itv[-1] not in ['m', 'h']:
-            prices.index = prices.index.date
+    def price(self, tickers, prd = '1mo', itv=None):
+        # Distinguising between two cases to make compatible for the graph function
+        if itv !=None:
+            prices = yf.download(tickers,auto_adjust=True, interval = itv, period = prd)['Close'][::-1]
+            if itv[-1] not in ['m', 'h']:
+                prices.index = prices.index.date
+        else:
+            prices = yf.download(tickers,auto_adjust=True, period = prd)['Close'][::-1]
         return prices
-
-test = investment_portfolio('Boaz')
-test.add_asset('AAPL', 'Computing', 'Stock', 4, 130)
-print(test.price('AAPL'))
+    
+    def graph(self, tickers = None, prd = 'max'):
+        if tickers == None:
+            tickers = self.portfolio.index.tolist()
+        prices = self.price(tickers, prd)
+        plt.figure()
+        # Plot each ticker individually and add label
+        if len(tickers) > 1:
+            for column in prices.columns:
+                plt.plot(prices.index, prices[column], label=column)
+        else: 
+            plt.plot(prices.index, prices, label=tickers)
+        plt.legend()
+        plt.show()
+        return
+    
+    def __str__(self):
+        # Creating string instance to easily print the portfolio
+        return '\n'+str(self.portfolio)
