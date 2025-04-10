@@ -1,4 +1,3 @@
-
 import yfinance as yf
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -8,11 +7,11 @@ pd.set_option('display.max_columns', None)
 class investment_portfolio:
 
     def __init__(self):         
-        clmns = ['Sector','Asset Class', 'Quantity', 'Purchase Price', 'Transaction Value', 'Current Value']
+        clmns = ['Sector','Asset Class', 'Quantity', 'Purchase Price', 'Transaction Value', 'Current Value'] 
         self.portfolio = pd.DataFrame(columns=clmns)
         return
     
-    def add_asset(self, ticker, sector, asset_class, quantity, purchase_price):
+    def add_asset(self, ticker, sector, asset_class, quantity, purchase_price): 
         transaction_value = quantity * purchase_price
         current_value = quantity * self.price(ticker, prd='1d').iloc[0, 0]
         self.portfolio.loc[ticker] = {'Sector': sector, 'Asset Class': asset_class, 'Quantity': quantity, 'Purchase Price': purchase_price,
@@ -22,11 +21,11 @@ class investment_portfolio:
     def price(self, tickers, prd = '1mo', itv=None):
         # Distinguising between two cases to make compatible for the graph function
         if itv !=None:
-            prices = yf.download(tickers,auto_adjust=True, interval = itv, period = prd)['Close'][::-1]
+            prices = yf.download(tickers,auto_adjust=True, interval = itv, period = prd, progress = False)['Close'][::-1]
             if itv[-1] not in ['m', 'h']:
                 prices.index = prices.index.date
         else:
-            prices = yf.download(tickers,auto_adjust=True, period = prd)['Close'][::-1]
+            prices = yf.download(tickers,auto_adjust=True, period = prd, progress = False)['Close'][::-1]
         return prices
     
     def graph(self, tickers = None, prd = 'max'):
@@ -44,6 +43,43 @@ class investment_portfolio:
         plt.show()
         return
     
-    def __str__(self):
+    def __str__(self): 
         # Creating string instance to easily print the portfolio
-        return '\n'+str(self.portfolio)
+        return '\nPortfolio:'+'\n'+str(self.portfolio.round(3))
+    
+    def portfolio_value(self, asset_class = False, sector = False):
+        total_value = self.portfolio['Current Value'].sum().round(3)
+
+        print(f'\nThe total portfolio value is: {total_value}\n')
+        
+        tickers = self.portfolio.index.tolist()
+        share_per_asset = pd.DataFrame(columns = ['Share of total value (per asset)'])
+        
+        for ticker in tickers:
+            share_per_asset.loc[ticker] = self.portfolio.loc[ticker]['Current Value']/total_value
+        
+        print(share_per_asset.round(3))
+        
+        if asset_class:
+            classes = self.portfolio['Asset Class'].unique()
+            share_per_asset_class = pd.DataFrame(columns = ['Share of total value (per asset class)'])
+
+            for a_class in classes:
+                mask = self.portfolio['Asset Class'] == a_class
+                value_a_class = self.portfolio.loc[mask]['Current Value'].sum()
+                share_per_asset_class.loc[a_class] = value_a_class/total_value
+            
+            print('\n'+str(share_per_asset_class.round(3)))
+        
+        if sector:
+            sectors = self.portfolio['Sector'].unique()
+            share_per_sector = pd.DataFrame(columns = ['Share of total value (per sector)'])
+
+            for sctr in sectors:
+                mask = self.portfolio['Sector'] == sctr
+                value_sector = self.portfolio.loc[mask]['Current Value'].sum()
+                share_per_sector.loc[sctr] = value_sector/total_value
+            
+            print('\n'+str(share_per_sector.round(3)))            
+                
+        return
