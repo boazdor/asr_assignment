@@ -2,6 +2,7 @@ import yfinance as yf
 import pandas as pd
 import matplotlib.pyplot as plt
 pd.set_option('display.max_columns', None)
+import numpy as np
 
 
 class investment_portfolio:
@@ -21,11 +22,11 @@ class investment_portfolio:
     def price(self, tickers, prd = '1mo', itv=None):
         # Distinguising between two cases to make compatible for the graph function
         if itv !=None:
-            prices = yf.download(tickers,auto_adjust=True, interval = itv, period = prd, progress = False)['Close'][::-1]
+            prices = yf.download(tickers, auto_adjust=True, interval = itv, period = prd, progress = False)['Close'][::-1]
             if itv[-1] not in ['m', 'h']:
                 prices.index = prices.index.date
         else:
-            prices = yf.download(tickers,auto_adjust=True, period = prd, progress = False)['Close'][::-1]
+            prices = yf.download(tickers, auto_adjust=True, period = prd, progress = False)['Close'][::-1] 
         return prices
     
     def graph(self, tickers = None, prd = 'max'):
@@ -45,9 +46,9 @@ class investment_portfolio:
     
     def __str__(self): 
         # Creating string instance to easily print the portfolio
-        return '\nPortfolio:'+'\n'+str(self.portfolio.round(3))
+        return '\nPortfolio:'+'\n'+str(self.portfolio.round(3)) 
     
-    def portfolio_value(self, asset_class = False, sector = False):
+    def portfolio_value(self, asset_class = False, sector = False): #added method for portfolio value
         total_value = self.portfolio['Current Value'].sum().round(3)
 
         print(f'\nThe total portfolio value is: {total_value}\n')
@@ -83,3 +84,49 @@ class investment_portfolio:
             print('\n'+str(share_per_sector.round(3)))            
                 
         return
+    
+    # Formula to calculate the stock price at a given moment in time
+    def S_T(self, T, t, St, simulations, mu, sigma):
+        WT_minus_Wt = np.random.normal(0, np.sqrt(T - t), size=simulations)
+        return St * np.exp((mu - 0.5 * (sigma**2)) * (T - t) + sigma * WT_minus_Wt)
+    
+    def portfolio_forecast(self):
+        # For the simulation, we assume (for simplicity) that the movement of the stocks are independent.
+        # We model the stocks as geometric brownian motions.
+        
+        sim = 1000
+        
+        tickers = self.portfolio.index.tolist()
+    
+        # We assume 251 trading days in a year
+        timeline = np.arange(0,251*5,1)
+
+        simulated_values = pd.DataFrame(columns=timeline)
+
+
+        for ticker in tickers:
+            
+            # Determine initial price
+            St_value = self.price(ticker, prd='1d').iloc[0, 0]
+            St = np.full(sim, St_value)
+
+            
+            # Create empty array to store the stock values
+            stockprice = np.zeros((sim,len(timeline)))
+            
+            # Determine the initial drift term and standard deviation
+            prices = yf.download(ticker, interval = '1d', auto_adjust=True, progress = False)['Close']
+            mu = prices.pct_change().dropna().mean()[0]
+            sigma = prices.pct_change().dropna().std()[0]
+            
+            # Loop over days in the next 5 years
+            for i in range(1,len(timeline)):
+                St = self.S_T(timeline[i],timeline[i-1], St, sim, mu, sigma)
+                stockprice[:,i] = St
+            
+            # Determine quantiles based on stock simulations
+            simulated_values.loc[f'{ticker}'+' 95% quantile'] = np.quantile(stockprice, 0.95 ,axis=0)
+            simulated_values.loc[f'{ticker}'+' 50% quantile'] = np.quantile(stockprice, 0.50 ,axis=0)
+            simulated_values.loc[f'{ticker}'+' 05% quantile'] = np.quantile(stockprice, 0.05 ,axis=0)
+            
+        return simulated_values  # Made the simulation for stocks seperately, next step is to simulate the entire portfolio
