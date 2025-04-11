@@ -4,23 +4,33 @@ import matplotlib.pyplot as plt
 pd.set_option('display.max_columns', None)
 import numpy as np
 
-
+# Class for keeping track of an investment portfolio
 class investment_portfolio:
 
-    def __init__(self):         
+    def __init__(self):   
+        # Portfolio structure with relevant fields
         clmns = ['Sector','Asset Class', 'Quantity', 'Purchase Price', 'Transaction Value', 'Current Value'] 
         self.portfolio = pd.DataFrame(columns=clmns)
         return
-    
+
+    # Add a new asset to the portfolio
     def add_asset(self, ticker, sector, asset_class, quantity, purchase_price): 
         transaction_value = quantity * purchase_price
+        # Obtain current price from yfinance and compute current value
         current_value = quantity * self.price(ticker, prd='1d').iloc[0, 0]
-        self.portfolio.loc[ticker] = {'Sector': sector, 'Asset Class': asset_class, 'Quantity': quantity, 'Purchase Price': purchase_price,
-                                      'Transaction Value': transaction_value, 'Current Value': current_value}
+        self.portfolio.loc[ticker] = {
+            'Sector': sector, 
+            'Asset Class': asset_class, 
+            'Quantity': quantity, 
+            'Purchase Price': purchase_price,
+            'Transaction Value': transaction_value, 
+            'Current Value': current_value
+            }
         return
     
+    # Function to fetch prices using yfinance (adjustable period and interval)
     def price(self, tickers, prd = '1mo', itv=None):
-        # Distinguising between two cases to make compatible for the graph function
+        # Distinguising between two cases to make price method compatible for the graph function
         if itv !=None:
             prices = yf.download(tickers, auto_adjust=True, interval = itv, period = prd, progress = False)['Close'][::-1]
             if itv[-1] not in ['m', 'h']:
@@ -29,12 +39,13 @@ class investment_portfolio:
             prices = yf.download(tickers, auto_adjust=True, period = prd, progress = False)['Close'][::-1] 
         return prices
     
+    # Plot the historical price of one or multiple assets
     def graph(self, tickers = None, prd = 'max'):
         if tickers == None:
             tickers = self.portfolio.index.tolist()
         prices = self.price(tickers, prd)
         plt.figure()
-        # Plot each ticker individually and add label
+        # Handle multi or single ticker plotting
         if len(tickers) > 1:
             for column in prices.columns:
                 plt.plot(prices.index, prices[column], label=column)
@@ -48,28 +59,31 @@ class investment_portfolio:
         plt.show()
         return
     
+    # Customize how the portfolio object prints
     def __str__(self): 
-        # Creating string instance to easily print the portfolio
         return '\nPortfolio:'+'\n'+str(self.portfolio.round(3)) 
     
+    # Shows total value and share of total value by asset, sector, or class.
     def portfolio_value(self, asset_class = False, sector = False):
         total_value = self.portfolio['Current Value'].sum().round(3)
-
         print(f'\nThe total portfolio value is: {total_value}\n')
         
         tickers = self.portfolio.index.tolist()
         share_per_asset = pd.DataFrame(columns = ['Share of total value (per asset)'])
         
+        # Calculate each asset's share of total value
         for ticker in tickers:
             share_per_asset.loc[ticker] = self.portfolio.loc[ticker]['Current Value']/total_value
         
         print(share_per_asset.round(3))
         
+        # Pie chart showing asset distribution
         plt.figure(figsize = (6, 6))
         plt.pie(share_per_asset['Share of total value (per asset)'], labels = share_per_asset.index)
         plt.title('Share Of Total Portfolio Value by Asset')
         plt.tight_layout()
         
+        # Optional: Breakdown by asset class
         if asset_class:
             classes = self.portfolio['Asset Class'].unique()
             share_per_asset_class = pd.DataFrame(columns = ['Share of total value (per asset class)'])
@@ -86,6 +100,7 @@ class investment_portfolio:
             plt.title('Share Of Total Portfolio Value by Asset Class')
             plt.tight_layout()
         
+        # Optional: Breakdown by sector
         if sector:
             sectors = self.portfolio['Sector'].unique()
             share_per_sector = pd.DataFrame(columns = ['Share of total value (per sector)'])
@@ -104,60 +119,55 @@ class investment_portfolio:
             
         return
     
-    # Formula to calculate the stock price at a given moment in time
+    # Simulates the stock price at time T, given some initial value St
     def S_T(self, T, t, St, simulations, mu, sigma):
         WT_minus_Wt = np.random.normal(0, np.sqrt(T - t), size=simulations)
         return St * np.exp((mu - 0.5 * (sigma**2)) * (T - t) + sigma * WT_minus_Wt)
     
+    # Monte Carlo forecast of the portfolio over 5 years (1000 simulations)
     def portfolio_forecast(self, graph = True):
         # For the simulation, we assume (for simplicity) that the movement of the stocks are independent.
         # We model the stocks as geometric brownian motions.
         
-        sim = 1000
-        
+        sim = 1000 # number of simulations
         tickers = self.portfolio.index.tolist()
-    
-        # We assume 251 trading days in a year
-        timeline = np.arange(0,251*5,1)
+        timeline = np.arange(0,251*5,1) # 251 trading days/year over 5 years
 
         simulated_portfolio = pd.DataFrame(columns=timeline)
-        
         simulated_portfolio.loc['95% quantile'] = 0.0
         simulated_portfolio.loc['50% quantile'] = 0.0
         simulated_portfolio.loc['5% quantile'] = 0.0
 
 
         for ticker in tickers:
-            # Determine initial price
+            # Set initial price and create base simulation array
             St_value = self.price(ticker, prd='1d').iloc[0, 0]
             St = np.full(sim, St_value)
-
-            
-            # Create empty array to store the stock values
             stockprice = np.zeros((sim,len(timeline)))
             stockprice[:,0] = St
             
-            # Determine the initial drift term and standard deviation
+            # Use historical data to estimate expected return (mu) and volatility (sigma)
             prices = yf.download(ticker, interval = '1d', auto_adjust=True, progress = False)['Close']
             mu = prices.pct_change().dropna().mean().iloc[0]
             sigma = prices.pct_change().dropna().std().iloc[0]
             
-            # Loop over days in the next 5 years
+            # Simulate price over each time step
             for i in range(1,len(timeline)):
                 St = self.S_T(timeline[i],timeline[i-1], St, sim, mu, sigma)
                 stockprice[:,i] = St
             
-            # Determine quantiles based on stock simulations
+            # Add weighted quantiles to overall portfolio simulation
             simulated_portfolio.loc['95% quantile'] += np.quantile(stockprice, 0.95 ,axis=0) * self.portfolio.loc[f'{ticker}']['Quantity']
             simulated_portfolio.loc['50% quantile'] += np.quantile(stockprice, 0.50 ,axis=0) * self.portfolio.loc[f'{ticker}']['Quantity']
             simulated_portfolio.loc['5% quantile'] += np.quantile(stockprice, 0.05 ,axis=0) * self.portfolio.loc[f'{ticker}']['Quantity']
         
+        # Plot forecast results if wanted
         if graph == True:
             timeline_adj = np.arange(0, 5, 1/251)
             plt.figure()
-            plt.plot(timeline_adj,simulated_portfolio.iloc[0],label='portfolio quantile 95%')
-            plt.plot(timeline_adj,simulated_portfolio.iloc[1],label='portfolio quantile 50%')
-            plt.plot(timeline_adj,simulated_portfolio.iloc[2],label='portfolio quantile 5%')
+            plt.plot(timeline_adj,simulated_portfolio.iloc[0],label='95% quantile')
+            plt.plot(timeline_adj,simulated_portfolio.iloc[1],label='50% quantile')
+            plt.plot(timeline_adj,simulated_portfolio.iloc[2],label='5% quantile')
             plt.title('5 Year Portfolio Forecast')
             plt.xlabel('Forecast Year')
             plt.ylabel('Portfolio Value')
@@ -166,3 +176,33 @@ class investment_portfolio:
             plt.show()
         
         return simulated_portfolio  
+     
+    
+#%% Example usage
+    
+# Create a portfolio instance
+my_portfolio = investment_portfolio()
+
+# Add assets (diverse sectors & classes for demo purposes)
+my_portfolio.add_asset('AAPL', 'Technology', 'Equity', 10, 150)
+my_portfolio.add_asset('MSFT', 'Technology', 'Equity', 5, 280)
+my_portfolio.add_asset('JNJ', 'Healthcare', 'Equity', 8, 165)
+my_portfolio.add_asset('TLT', 'Government Bonds', 'Bond', 20, 100)
+my_portfolio.add_asset('GLD', 'Commodities', 'ETF', 15, 170)
+
+# Print current portfolio overview
+print(my_portfolio)
+
+# Show pie charts of value distribution
+# Enable both sector and asset class breakdowns
+my_portfolio.portfolio_value(sector=True, asset_class=True)
+
+# Forecast the portfolio value over 5 years using Monte Carlo simulations
+# Show the 5%, 50%, and 95% quantile bands in a graph
+forecast_results = my_portfolio.portfolio_forecast(graph=True)
+
+# Plot 10 year historical prices for two assets in the portfolio
+my_portfolio.graph(tickers = ['JNJ', 'GLD'], prd = '10y')
+
+# Plot 5 year historical prices for all assets in the portfolio
+my_portfolio.graph(prd = '5y')
