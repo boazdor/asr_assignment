@@ -1,10 +1,3 @@
-import yfinance as yf
-import pandas as pd
-import matplotlib.pyplot as plt
-pd.set_option('display.max_columns', None)
-import numpy as np
-
-
 class investment_portfolio:
 
     def __init__(self):         
@@ -41,6 +34,10 @@ class investment_portfolio:
         else: 
             plt.plot(prices.index, prices, label=tickers)
         plt.legend()
+        plt.title('Historic Stock Prices')
+        plt.xlabel('Year') 
+        plt.ylabel('Stock Price') 
+        plt.tight_layout()
         plt.show()
         return
     
@@ -48,7 +45,7 @@ class investment_portfolio:
         # Creating string instance to easily print the portfolio
         return '\nPortfolio:'+'\n'+str(self.portfolio.round(3)) 
     
-    def portfolio_value(self, asset_class = False, sector = False): #added method for portfolio value
+    def portfolio_value(self, asset_class = False, sector = False):
         total_value = self.portfolio['Current Value'].sum().round(3)
 
         print(f'\nThe total portfolio value is: {total_value}\n')
@@ -90,7 +87,7 @@ class investment_portfolio:
         WT_minus_Wt = np.random.normal(0, np.sqrt(T - t), size=simulations)
         return St * np.exp((mu - 0.5 * (sigma**2)) * (T - t) + sigma * WT_minus_Wt)
     
-    def portfolio_forecast(self):
+    def portfolio_forecast(self, graph = True):
         # For the simulation, we assume (for simplicity) that the movement of the stocks are independent.
         # We model the stocks as geometric brownian motions.
         
@@ -101,11 +98,14 @@ class investment_portfolio:
         # We assume 251 trading days in a year
         timeline = np.arange(0,251*5,1)
 
-        simulated_values = pd.DataFrame(columns=timeline)
+        simulated_portfolio = pd.DataFrame(columns=timeline)
+        
+        simulated_portfolio.loc['95% quantile'] = 0.0
+        simulated_portfolio.loc['50% quantile'] = 0.0
+        simulated_portfolio.loc['5% quantile'] = 0.0
 
 
         for ticker in tickers:
-            
             # Determine initial price
             St_value = self.price(ticker, prd='1d').iloc[0, 0]
             St = np.full(sim, St_value)
@@ -113,11 +113,12 @@ class investment_portfolio:
             
             # Create empty array to store the stock values
             stockprice = np.zeros((sim,len(timeline)))
+            stockprice[:,0] = St
             
             # Determine the initial drift term and standard deviation
             prices = yf.download(ticker, interval = '1d', auto_adjust=True, progress = False)['Close']
-            mu = prices.pct_change().dropna().mean()[0]
-            sigma = prices.pct_change().dropna().std()[0]
+            mu = prices.pct_change().dropna().mean().iloc[0]
+            sigma = prices.pct_change().dropna().std().iloc[0]
             
             # Loop over days in the next 5 years
             for i in range(1,len(timeline)):
@@ -125,8 +126,21 @@ class investment_portfolio:
                 stockprice[:,i] = St
             
             # Determine quantiles based on stock simulations
-            simulated_values.loc[f'{ticker}'+' 95% quantile'] = np.quantile(stockprice, 0.95 ,axis=0)
-            simulated_values.loc[f'{ticker}'+' 50% quantile'] = np.quantile(stockprice, 0.50 ,axis=0)
-            simulated_values.loc[f'{ticker}'+' 05% quantile'] = np.quantile(stockprice, 0.05 ,axis=0)
-            
-        return simulated_values  # Made the simulation for stocks seperately, next step is to simulate the entire portfolio
+            simulated_portfolio.loc['95% quantile'] += np.quantile(stockprice, 0.95 ,axis=0) * self.portfolio.loc[f'{ticker}']['Quantity']
+            simulated_portfolio.loc['50% quantile'] += np.quantile(stockprice, 0.50 ,axis=0) * self.portfolio.loc[f'{ticker}']['Quantity']
+            simulated_portfolio.loc['5% quantile'] += np.quantile(stockprice, 0.05 ,axis=0) * self.portfolio.loc[f'{ticker}']['Quantity']
+        
+        if graph == True:
+            timeline_adj = np.arange(0, 5, 1/251)
+            plt.figure()
+            plt.plot(timeline_adj,simulated_portfolio.iloc[0],label='portfolio quantile 95%')
+            plt.plot(timeline_adj,simulated_portfolio.iloc[1],label='portfolio quantile 50%')
+            plt.plot(timeline_adj,simulated_portfolio.iloc[2],label='portfolio quantile 5%')
+            plt.title('5 Year Portfolio Forecast')
+            plt.xlabel('Forecast Year')
+            plt.ylabel('Portfolio Value')
+            plt.legend()
+            plt.tight_layout()
+            plt.show()
+        
+        return simulated_portfolio  
