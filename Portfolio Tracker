@@ -1,3 +1,10 @@
+import yfinance as yf
+import pandas as pd
+import matplotlib.pyplot as plt
+pd.set_option('display.max_columns', None)
+import numpy as np
+
+
 class investment_portfolio:
 
     def __init__(self):         
@@ -35,9 +42,9 @@ class investment_portfolio:
             plt.plot(prices.index, prices, label=tickers)
         plt.legend()
         plt.title('Historic Stock Prices')
-        plt.xlabel('Year') 
-        plt.ylabel('Stock Price') 
-        plt.tight_layout()
+        plt.xlabel('Year')
+        plt.ylabel('Stock Price')
+        plt.tight_layout() 
         plt.show()
         return
     
@@ -58,6 +65,11 @@ class investment_portfolio:
         
         print(share_per_asset.round(3))
         
+        plt.figure(figsize = (6, 6))
+        plt.pie(share_per_asset['Share of total value (per asset)'], labels = share_per_asset.index)
+        plt.title('Share Of Total Portfolio Value by Asset')
+        plt.tight_layout()
+        
         if asset_class:
             classes = self.portfolio['Asset Class'].unique()
             share_per_asset_class = pd.DataFrame(columns = ['Share of total value (per asset class)'])
@@ -68,6 +80,11 @@ class investment_portfolio:
                 share_per_asset_class.loc[a_class] = value_a_class/total_value
             
             print('\n'+str(share_per_asset_class.round(3)))
+            
+            plt.figure(figsize = (6, 6))
+            plt.pie(share_per_asset_class['Share of total value (per asset class)'], labels = share_per_asset_class.index)
+            plt.title('Share Of Total Portfolio Value by Asset Class')
+            plt.tight_layout()
         
         if sector:
             sectors = self.portfolio['Sector'].unique()
@@ -80,6 +97,11 @@ class investment_portfolio:
             
             print('\n'+str(share_per_sector.round(3)))            
                 
+            plt.figure(figsize = (6, 6))
+            plt.pie(share_per_sector['Share of total value (per sector)'], labels = share_per_sector.index)
+            plt.title('Share Of Total Portfolio Value by Sector')
+            plt.tight_layout()
+            
         return
     
     # Formula to calculate the stock price at a given moment in time
